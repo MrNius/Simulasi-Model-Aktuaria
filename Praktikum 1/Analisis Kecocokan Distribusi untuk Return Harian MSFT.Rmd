@@ -1,0 +1,118 @@
+---
+title: "Analisis Kecocokan Distribusi untuk Return Harian MSFT"
+author: "Antonius Aditya Rizky Wijaya"
+date: "2025-08-19"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Analisis Kecocokan Distribusi untuk Return Harian MSFT
+
+# Load packages
+if (!require("quantmod")) install.packages("quantmod")
+if (!require("fitdistrplus")) install.packages("fitdistrplus")
+if (!require("QRM")) install.packages("QRM")  # Untuk distribusi stable dan NIG
+library(quantmod)
+library(fitdistrplus)
+library(QRM)
+install.packages("e1071")
+# Mengunduh data
+getSymbols("MSFT", from = "2023-05-15", to = "2023-08-14", src = "yahoo")
+harga_penutupan <- Ad(MSFT)
+return_harian <- dailyReturn(harga_penutupan, type = "arithmetic")
+return_harian <- return_harian[-1]
+returns <- as.numeric(return_harian)
+
+# Menampilkan statistik deskriptif
+cat("Statistik Deskriptif Return Harian MSFT:\n")
+cat("Rata-rata:", round(mean(returns), 6), "\n")
+cat("Standar Deviasi:", round(sd(returns), 6), "\n")
+cat("Skewness:", round(e1071::skewness(returns), 6), "\n")
+cat("Kurtosis:", round(e1071::kurtosis(returns), 6), "\n\n")
+
+# 1. Membandingkan beberapa distribusi
+cat("Membandingkan Kecocokan Beberapa Distribusi:\n")
+
+# Normal distribution
+fit_norm <- fitdist(returns, "norm")
+cat("AIC untuk distribusi Normal:", round(fit_norm$aic, 2), "\n")
+
+# Student's t-distribution
+fit_t <- fitdist(returns, "t", start = list(df = 3))
+cat("AIC untuk distribusi t:", round(fit_t$aic, 2), "\n")
+
+# Logistic distribution
+fit_logis <- fitdist(returns, "logis")
+cat("AIC untuk distribusi Logistic:", round(fit_logis$aic, 2), "\n")
+
+# 2. Plot perbandingan distribusi
+# Membuat histogram dengan probability density
+h <- hist(returns, breaks = 30, plot = FALSE)
+h$density <- h$counts / (sum(h$counts) * diff(h$breaks))
+
+plot(h, freq = FALSE,
+     main = "Perbandingan Kecocokan Berbagai Distribusi",
+     xlab = "Return Harian", 
+     ylab = "Kepadatan Probabilitas",
+     col = "lightblue",
+     border = "black",
+     ylim = c(0, max(h$density) * 1.2))
+
+# Menambahkan kurva distribusi normal
+x_seq <- seq(min(returns), max(returns), length = 100)
+lines(x_seq, dnorm(x_seq, mean = fit_norm$estimate["mean"], sd = fit_norm$estimate["sd"]), 
+      col = "red", lwd = 2)
+
+# Menambahkan kurva distribusi t
+lines(x_seq, dt((x_seq - fit_t$estimate["m"])/fit_t$estimate["s"], df = fit_t$estimate["df"])/fit_t$estimate["s"], 
+      col = "darkgreen", lwd = 2)
+
+# Menambahkan kurva distribusi logistic
+lines(x_seq, dlogis(x_seq, location = fit_logis$estimate["location"], scale = fit_logis$estimate["scale"]), 
+      col = "purple", lwd = 2)
+
+# Menambahkan legenda
+legend("topright", 
+       legend = c("Data", "Normal", "Student's t", "Logistic"),
+       col = c("lightblue", "red", "darkgreen", "purple"),
+       lty = c(1, 1, 1, 1),
+       lwd = c(10, 2, 2, 2),
+       bty = "n")
+
+# 3. Uji Kecocokan dengan QQ-Plot
+cat("\nEvaluasi Kecocokan Distribusi:\n")
+
+# QQ-Plot untuk distribusi normal
+qqnorm(returns, main = "QQ-Plot vs Distribusi Normal")
+qqline(returns, col = "red")
+
+# QQ-Plot untuk distribusi t
+par(mfrow = c(1, 2))
+qqplot(returns, rt(1000, df = fit_t$estimate["df"]), 
+       main = "QQ-Plot vs Distribusi t",
+       xlab = "Quantiles Data", 
+       ylab = "Quantiles Distribusi t")
+abline(0, 1, col = "red")
+
+# 4. Kesimpulan
+cat("Berdasarkan analisis AIC (Akaike Information Criterion):\n")
+cat("Nilai AIC yang lebih rendah menunjukkan model yang lebih baik.\n")
+
+cat("\nKesimpulan:\n")
+if (fit_t$aic < fit_norm$aic && fit_t$aic < fit_logis$aic) {
+  cat("Distribusi Student's t memberikan kecocokan terbaik berdasarkan AIC.\n")
+  cat("Ini konsisten dengan karakteristik return saham yang sering menunjukkan 'fat tails'.\n")
+} else if (fit_norm$aic < fit_t$aic && fit_norm$aic < fit_logis$aic) {
+  cat("Distribusi Normal memberikan kecocokan terbaik berdasarkan AIC.\n")
+} else {
+  cat("Distribusi Logistic memberikan kecocokan terbaik berdasarkan AIC.\n")
+}
+
+cat("\nRekomendasi:\n")
+cat("Untuk pemodelan return harian MSFT, distribusi Student's t mungkin lebih tepat\n")
+cat("karena mampu menangkap sifat fat-tailed yang umum pada data return saham.\n")
+```
