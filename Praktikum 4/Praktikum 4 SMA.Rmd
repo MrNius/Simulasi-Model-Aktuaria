@@ -1,0 +1,305 @@
+---
+title: "Praktikum 4 SMA"
+author: "Antonius Aditya Rizky Wijaya"
+date: "2025-09-10"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# NOMOR 1
+
+Kita tahu kalau:
+$$ X \sim \Gamma\left(shape=\frac{r}{2}, scale=2 \right) \sim \chi^2_r $$
+
+Bukti bisa dilihat dari fkp sebaran $\chi^2_r$:
+$$f(x)=\frac{1}{2^{\frac{r}{2}}.\Gamma(\frac{r}{2})}.x^{\frac{r}{2}-1}.e^{-\frac{x}{2}}$$
+Dimana fkp ini sama dengan fkp sebaran $\Gamma(\frac{r}{2}, 2)$
+
+Kita juga tahu kalau 
+$$ Z \sim N(0,1) $$
+maka 
+$$ Z^2 \sim \chi^2_1 $$
+
+Sehingga jika $W \sim \Gamma(\frac{1}{2}, 2)$, maka $W = Z^2 \sim \chi^2_1$, yang artinya
+$$ \sqrt{W} = Z \sim N(0,1)$$
+```{r}
+set.seed(123)
+n <- 100
+W <- rgamma(n, shape=0.5, scale = 2) #chi_kuadrat, df = 1
+tanda <- ifelse(runif(n) > 0.5, 1, -1)
+data <- tanda * sqrt(W)
+
+batas <- c(-Inf, -2, -1, 0, 1, 2, Inf)
+hist(data, breaks=batas, xlim = c(-3,3))
+oi <- hist(data, breaks=batas, plot=FALSE)$counts
+names(oi) <- c("(-inf,-2)", "[-2,-1)", "[-1,0)", "[0,1)", "[1,2)", "[2,inf)")
+print("Tabel Frekuensi Observasi:")
+print(oi)
+
+peluang <- c(pnorm(-2), pnorm(-1)-pnorm(-2), pnorm(0)-pnorm(-1), pnorm(1)-pnorm(0), pnorm(2)-pnorm(1), 1-pnorm(2))
+ei <- n*peluang
+
+# Manual
+diskrepansi <- function(oi, ei) {
+  d <- sum((oi - ei)^2 / ei)
+  return(d)
+}
+hasil_d <- diskrepansi(oi,ei)
+p_value <- 1 - pchisq(hasil_d, df = (length(oi)-1))
+
+# Dengan function
+hasil_tes <- chisq.test(oi, p=peluang)
+
+# Tampilkan hasil
+cat("Peluang teoritis pada selang ke i (pi_i):\n", round(peluang, 4), "\n")
+cat("\nEkspektasi banyak data pada selang ke i (e_i):\n", round(ei, 2), "\n")
+cat("\np_value manual:", round(p_value, 4), "\n")
+print(hasil_tes)
+```
+_p-value_ $= 0.4085 > 0.1$, sehingga tidak ada bukti untuk menolak $H_0$. Artinya dengan uji c-squared pada tingkat kepercayaan $95$%, 100 nilai data tersebut menyebar normal baku.
+
+```{r}
+library(fitdistrplus)
+descdist(data, discrete = FALSE)
+```
+
+
+# NOMOR 2
+## 2a
+```{r}
+orang <- 0:6
+jam <- c(0, 6, 5, 4, 4, 3, 2)
+data_pengunjung <- rep(orang, jam)
+cat("Data:\n", data_pengunjung)
+total_orang <- sum(jam * orang)
+cat("\nTotal orang:", total_orang, "\n")
+n <- length(data_pengunjung)
+cat("Total data:", n, "\n")
+lambda <- total_orang / n
+cat("Estimasi lambda:", round(lambda, 4), "\n")
+```
+```{r}
+set.seed(123)
+x <- c(0:15)
+y <- dpois(x, lambda)
+plot(x, y)
+
+data_fmp <- data.frame(x,round(y, 4))
+colnames(data_fmp) <- c("x", "f(x)")
+print(data_fmp)
+```
+```{r}
+prob <- dpois(2, lambda) + dpois(3, lambda) + dpois(6, lambda);prob
+```
+
+```{r}
+o1 <- NULL
+o2 <- NULL
+for(i in data_pengunjung){
+  if(i == 2 | i == 3 | i == 6){
+    o1 <- c(o1, i)
+  }
+  else{
+    o2 <- c(o2, i)
+  }
+}
+oi <- c(length(o1), length(o2))
+
+e1 <- n*prob
+e2 <- n*(1-prob)
+ei <- c(e1, e2)
+```
+
+```{r}
+d <- sum((oi - ei)^2/ei)
+p_value <- 1 - pchisq(d, df = length(oi) - 1)
+cat("Diskrepansi =", d, "\n")
+cat("P-value =", p_value)
+```
+
+```{r}
+# Dengan function
+uji_chi <- chisq.test(oi, p=c(prob, 1-prob))
+cat("\nHasil:\n")
+print(uji_chi)
+```
+
+_p-value_ $= 0.6872 > 0.1$, sehingga tidak ada bukti untuk menolak $H_0$. Artinya dengan uji chi-squared dengan kepercayaan $95$%, banyaknya orang yang datang menyebar Poisson.
+
+## 2b
+```{r}
+# Uji Kolmogorov-Smirnov
+ks.test(data_pengunjung, "ppois", lambda = lambda, alternative = "two.sided", simulate.p.value = TRUE)
+```
+_p-value_ $= 0.2631 > 0.1$, sehingga tidak ada bukti untuk menolak $H_0$. Artinya dengan uji K-S dengan kepercayaan $95$%, banyaknya orang yang datang menyebar Poisson.
+
+
+# NOMOR 3
+
+## 3a
+```{r, warning = FALSE}
+data <- c(6.5, 4.6, 5.6, 8.5, 6.0, 6.9, 4.4, 6.3, 6.2, 7.0, 5.7, 6.1)
+norm <- fitdist(data, "norm", method = "mle")
+print(norm)
+logLik(norm)
+```
+
+```{r, warning = FALSE}
+lnorm <- fitdist(data, "lnorm", method = "mle")
+print(lnorm)
+logLik(lnorm)
+```
+
+```{r,, warning = FALSE}
+gamma <- fitdist(data, "gamma", method = "mle")
+print(gamma)
+logLik(gamma)
+```
+
+```{r, warning = FALSE}
+cat("Loglikelihood normal: ", logLik(norm), "\n")
+cat("Loglikelihood normal: ", logLik(lnorm), "\n")
+cat("Loglikelihood normal: ", logLik(gamma), "\n")
+```
+Gamma fit terbaik dengan nilai loglikelihood terbesar.
+
+## 3b
+```{r}
+set.seed(123)
+x <- c(0:10000)/1000
+y <- pgamma(x, shape = gamma$estimate["shape"], rate = gamma$estimate["rate"])
+plot(ecdf(data), xlim = c(2,10), col = "red", ylab = "F(x)", main = "FSKPE vs FKP Gamma")
+lines(x, y, col = "green", lwd = 1)
+legend("topleft", legend = c("Empiris", "Gamma"), col = c("red", "green"), bty = "n", lwd = 2)
+```
+Plot FSK empiris dengan FSK gamma terlihat hampir fit yang artinya jaraknya hampir nol, sehingga nantinya akan membuat diskrepansi D menjadi sangat kecil, yang menyebabkan _p_value_ yang besar.
+
+## 3c
+Karena jumlah data 12 dan ingin nilai $e_i \geq 5$, maka selang yang mungkin adalah 2.
+
+```{r}
+sel <- 2
+ei <- 6
+
+q <- qgamma(0.5, shape=gamma$estimate["shape"], rate=gamma$estimate["rate"])
+o1 <- sum(data <= q)
+o2 <- sum(data > q)
+oi <- c(o1, o2)
+
+d <- sum((oi-ei)^2 / ei)
+p_value <- 1-pchisq(d, df = sel-1)
+
+cat("Diskrepansi =", d, "\n")
+cat("P-value =", p_value)
+```
+_p-value_ $= 0.5637 > 0.1$, sehingga tidak ada bukti untuk menolak $H_0$. Artinya dengan uji chi-squared dengan kepercayaan $95$%, data mengikuti sebaran gamma.
+
+## 3d
+```{r}
+ks.test(data, "pgamma", shape=gamma$estimate["shape"], rate=gamma$estimate["rate"], alternative = "two.sided", simulate.p.value = TRUE)
+```
+_p-value_ $= 0.9291 > 0.1$, sehingga tidak ada bukti untuk menolak $H_0$. Artinya dengan uji K-S dengan kepercayaan $95$%, data mengikuti sebaran gamma.
+
+```{r, warning = FALSE}
+data <- sort(data)
+fske <- c(1:length(data))/length(data)
+
+fgam <- pgamma(data, shape = gamma$estimate["shape"], rate = gamma$estimate["rate"])
+
+du <- NULL
+dl <- c(0-fgam[1])
+for(i in 1:length(fske)){
+  du[i] <- fske[i] - fgam[i]
+}
+for(i in 2:length(fske)){
+  dl[i] <- fske[i-1] - fgam[i]
+}
+
+d <- max(abs(du), abs(dl));d
+
+KSgamma <- function(KSd, m, size){
+  KS <- NULL
+  
+  upper <- c(1:size)/size
+  lower <- upper - 1/size
+  for(i in 1:m){
+    ndata <- sort(rgamma(size, shape = gamma$estimate["shape"], rate = gamma$estimate["rate"]))
+    fit <- fitdist(ndata, "gamma", method = "mle")
+    shape <- fit$estimate["shape"]
+    rate <- fit$estimate["rate"]
+    U <- abs(upper - pgamma(ndata, shape, rate))
+    L <- abs(lower - pgamma(ndata, shape, rate))
+    ddot <- max(U, L)
+    KS <- c(KS, ddot)
+  }
+  
+  p <- length(KS[KS > KSd]) / m
+  return(p)
+}
+
+p <- KSgamma(d, 1000, length(data));p
+```
+
+
+# NOMOR 4
+```{r}
+nilai_uas <- c(30, 47, 84, 54, 56, 70, 45, 10, 21, 61, 52, 61)
+rata_rata <- mean(nilai_uas)
+standar_deviasi <- sd(nilai_uas)
+cat("Rata-rata:", round(rata_rata, 2), "\n")
+cat("Standar deviasi:", round(standar_deviasi, 2), "\n")
+
+ks.test(nilai_uas, "pnorm", mean=rata_rata, sd=standar_deviasi, alternative = "two.sided", simulate.p.value = TRUE)
+```
+Diskrepansi D = 0.16874 sangat kecil, menunjukkan jarak antara FSK empiris data dan FSK normal(49.25, 20.72^2) hampir nol, dan data sangat dekat dengan distribusi normal.
+
+_p-value_ $= 0.8841 > 0.1$, sehingga tidak ada bukti untuk menolak $H_0$. Artinya dengan uji K-S dengan kepercayaan $95$%, data nilai UAS ini berasal dari distribusi normal $ N(49.25, 20.72^2) $
+
+```{r}
+uas <- sort(nilai_uas)
+n <- length(uas)
+mean <- mean(uas)
+sd <- sd(uas)
+
+up <- c(1:n)/n
+low <- up - 1/n
+
+du <- NULL
+dl <- NULL
+for(i in 1:n){
+  du[i] <- abs(up[i] - pnorm(uas[i], mean, sd))
+  dl[i] <- abs(low[i] - pnorm(uas[i], mean, sd))
+}
+
+d <- max(du, dl);d
+
+KSnorm <- function(KSd, m, n){
+  KS <- NULL
+  upper <- c(1:n)/n
+  lower <- upper - 1/n
+  
+  for(i in 1:m){
+    baru <- sort(rnorm(n, mean, sd))
+    xbar <- mean(baru)
+    stdev <- sd(baru)
+    
+    U <- abs(upper - pnorm(baru, xbar, stdev))
+    L <- abs(lower - pnorm(baru, xbar, stdev))
+    ddot <- max(U, L)
+    KS <- c(KS, ddot)
+  }
+  
+  pval <- length(KS[KS > KSd]) / m
+  return(pval)
+}
+
+p <- KSnorm(d, 1000, n);p
+```
+
+```{r}
+descdist(nilai_uas, discrete = FALSE)
+```
+
